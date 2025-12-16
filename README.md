@@ -13,6 +13,7 @@ This project aims to explore how AI-driven perception systems can assist in unde
 
 🧩 System Components
 
+
 1️⃣ Video Analysis (Computer Vision)
 
 Frame-level analysis using OpenCV
@@ -30,6 +31,7 @@ Features extracted:
 -Temporal aggregation using sliding windows
 
 
+
 2️⃣ Audio Analysis (Signal Processing)
 
 Audio extracted directly from video
@@ -45,11 +47,13 @@ Features extracted:
 -Detection of high auditory stimulation levels
 
 
+
 3️⃣ Environmental Context
 
 Weather information (temperature, humidity, UV index, air quality)
 
 Integrated as a contextual risk factor
+
 
 4️⃣ Multimodal Risk Assessment
 
@@ -64,6 +68,7 @@ Generation of:
 -Alert flags (distress_flag, overload_flag)
 
 -Human-readable alerts
+
 
 
 ⚙️ Methodology
@@ -89,6 +94,7 @@ Generation of:
 -Suitable for healthcare-oriented applications
 
 
+
 🖥️ Frontend Interface
 
 A Streamlit-based web interface allows users to:
@@ -102,6 +108,7 @@ A Streamlit-based web interface allows users to:
 -Highlight distress and overload segments
 
 -Download results as a CSV file
+
 
 
 🛠️ Technologies Used
@@ -119,6 +126,7 @@ A Streamlit-based web interface allows users to:
 -Streamlit
 
 -WeatherAPI
+
 
 
 🚀 How to Run
