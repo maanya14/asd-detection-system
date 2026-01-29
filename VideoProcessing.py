@@ -9,10 +9,9 @@ import requests
 # ===========================================================
 # CONFIG
 # ===========================================================
-WINDOW = 10        # seconds per analysis window
-STEP = 5           # seconds between windows
+WINDOW = 10
+STEP = 5
 AUDIO_SR = 22050
-
 
 # ===========================================================
 # TIME HELPER
@@ -22,7 +21,6 @@ def to_timestamp(sec):
     m = int((sec % 3600) // 60)
     s = int(sec % 60)
     return f"{h:02d}:{m:02d}:{s:02d}", h, m, s
-
 
 # ===========================================================
 # HAAR CASCADES
@@ -37,9 +35,8 @@ MOUTH_CASCADE = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_smile.xml"
 )
 
-
 # ===========================================================
-# FACIAL EMOTION
+# FACIAL EMOTION (FRAME LEVEL)
 # ===========================================================
 def analyze_face_emotion_frame(img):
     if img is None:
@@ -79,9 +76,8 @@ def analyze_face_emotion_frame(img):
 
     return emotion, round(score, 3)
 
-
 # ===========================================================
-# AUDIO ANALYSIS (FROM VIDEO)
+# AUDIO ANALYSIS
 # ===========================================================
 def analyze_audio(video_path, video_id):
     try:
@@ -116,7 +112,6 @@ def analyze_audio(video_path, video_id):
         })
 
     return rows
-
 
 # ===========================================================
 # VIDEO ANALYSIS
@@ -173,8 +168,10 @@ def analyze_video(video_path, video_id):
             if e not in ("no_face", "error")
         ]
 
-        face_e, face_s = ("no_face", 0.0)
-        if candidates:
+        if not candidates:
+            face_e = "No face detected"
+            face_s = 0.0
+        else:
             face_e, face_s = max(candidates, key=lambda x: x[1])
 
         rows.append({
@@ -191,7 +188,6 @@ def analyze_video(video_path, video_id):
         })
 
     return rows
-
 
 # ===========================================================
 # WEATHER RISK
@@ -219,26 +215,19 @@ def get_weather_risk():
     except Exception:
         return 0
 
-
 # ===========================================================
-# MAIN PIPELINE
+# SINGLE VIDEO PIPELINE (SAFE)
 # ===========================================================
-def process_multimodal(video_folder, output_csv=None):
+def process_single_video(video_path, output_csv=None):
 
-    audio_rows, video_rows = [], []
+    video_id = os.path.splitext(os.path.basename(video_path))[0]
 
-    for f in os.listdir(video_folder):
-        if f.lower().endswith((".mp4", ".mov", ".avi", ".mkv")):
-            path = os.path.join(video_folder, f)
-            vid = os.path.splitext(f)[0]
-
-            audio_rows.extend(analyze_audio(path, vid))
-            video_rows.extend(analyze_video(path, vid))
+    audio_rows = analyze_audio(video_path, video_id)
+    video_rows = analyze_video(video_path, video_id)
 
     df_audio = pd.DataFrame(audio_rows)
     df_video = pd.DataFrame(video_rows)
 
-    # ---- SAFE MERGE ----
     if not df_audio.empty and not df_video.empty:
         df = pd.merge(
             df_audio, df_video,
@@ -252,7 +241,7 @@ def process_multimodal(video_folder, output_csv=None):
     else:
         return None
 
-    # ---- ENSURE RISK COLUMNS ----
+    # ---- SAFE COLUMN HANDLING ----
     if "audio_risk" not in df.columns:
         df["audio_risk"] = 0
     else:
@@ -264,8 +253,6 @@ def process_multimodal(video_folder, output_csv=None):
         df["video_risk"] = df["video_risk"].fillna(0).astype(int)
 
     df["weather_risk"] = get_weather_risk()
-
-    # ---- FINAL STATE ----
     df["total_risk"] = df["audio_risk"] + df["video_risk"] + df["weather_risk"]
 
     df["overall_state"] = df["total_risk"].apply(
@@ -275,18 +262,28 @@ def process_multimodal(video_folder, output_csv=None):
 
     df["overload_flag"] = (
         (df["overall_state"] == "Severe Overload") &
-        (df.get("face_score", 0) >= 0.8)
+        (df["face_score"].fillna(0) >= 0.8) &
+        (df["face_emotion"] != "No face detected")
     ).astype(int)
 
     df["distress_flag"] = (
-        (df.get("face_score", 0) >= 0.6) &
-        (df.get("face_emotion", "").isin(["sad", "angry", "surprised"]))
+        (df["face_score"].fillna(0) >= 0.6) &
+        (df["face_emotion"].isin(["sad", "angry", "surprised"]))
     ).astype(int)
 
     df["text_alert"] = df.apply(
-        lambda r: "⚠️ Overload detected, intervention needed"
-        if r["overload_flag"]
-        else ("⚠️ Person appears distressed" if r["distress_flag"] else "No alert"),
+        lambda r:
+        "No face detected"
+        if r["face_emotion"] == "No face detected"
+        else (
+            "⚠️ Overload detected, intervention needed"
+            if r["overload_flag"]
+            else (
+                "⚠️ Person appears distressed"
+                if r["distress_flag"]
+                else "No alert"
+            )
+        ),
         axis=1
     )
 

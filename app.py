@@ -3,37 +3,35 @@ import uuid
 import streamlit as st
 import matplotlib.pyplot as plt
 
-from VideoProcessing import process_multimodal
+from VideoProcessing import process_single_video
 
 st.set_page_config(layout="wide")
 st.title("🧠 ASD Multimodal Overload Detection")
 
-# ================= SESSION STATE =================
 if "df" not in st.session_state:
     st.session_state.df = None
 
-# ================= FILE UPLOAD =================
-uploaded_videos = st.file_uploader(
-    "Upload video(s)",
+uploaded_video = st.file_uploader(
+    "Upload a video",
     type=["mp4", "mov", "avi", "mkv"],
-    accept_multiple_files=True
+    accept_multiple_files=False
 )
 
 if st.button("▶ Run Analysis"):
 
-    if not uploaded_videos:
-        st.error("Please upload at least one video.")
+    if not uploaded_video:
+        st.error("Please upload a video.")
         st.stop()
 
-    run_dir = f"video_samples_{uuid.uuid4().hex[:6]}"
+    run_dir = f"video_{uuid.uuid4().hex[:6]}"
     os.makedirs(run_dir, exist_ok=True)
 
-    for v in uploaded_videos:
-        with open(os.path.join(run_dir, v.name), "wb") as f:
-            f.write(v.read())
+    video_path = os.path.join(run_dir, uploaded_video.name)
+    with open(video_path, "wb") as f:
+        f.write(uploaded_video.read())
 
-    with st.spinner("Processing video(s)..."):
-        df = process_multimodal(run_dir)
+    with st.spinner("Processing video..."):
+        df = process_single_video(video_path)
 
     if df is None or df.empty:
         st.error("No valid analysis windows produced.")
@@ -49,31 +47,28 @@ if st.session_state.df is not None:
     st.subheader("Preview")
     st.dataframe(df.head(20))
 
-    video_id = st.selectbox("Select video", df["video_id"].unique())
-
-    vdf = df[df["video_id"] == video_id].copy()
-
     def ts_to_sec(t):
         h, m, s = map(int, t.split(":"))
         return h * 3600 + m * 60 + s
 
-    vdf["time"] = vdf["timestamp"].apply(ts_to_sec)
+    df["time"] = df["timestamp"].apply(ts_to_sec)
     state_map = {"Calm": 0, "Moderate Overload": 1, "Severe Overload": 2}
-    vdf["state_level"] = vdf["overall_state"].map(state_map)
+    df["state_level"] = df["overall_state"].map(state_map)
 
-    fig, ax = plt.subplots()
-    ax.plot(vdf["time"], vdf["state_level"], marker="o")
+    fig, ax = plt.subplots(figsize=(7, 3))
+
+    ax.plot(df["time"], df["state_level"], marker="o")
 
     ax.scatter(
-        vdf[vdf["overload_flag"] == 1]["time"],
-        vdf[vdf["overload_flag"] == 1]["state_level"],
+        df[df["overload_flag"] == 1]["time"],
+        df[df["overload_flag"] == 1]["state_level"],
         color="red",
         label="Overload"
     )
 
     ax.scatter(
-        vdf[vdf["distress_flag"] == 1]["time"],
-        vdf[vdf["distress_flag"] == 1]["state_level"],
+        df[df["distress_flag"] == 1]["time"],
+        df[df["distress_flag"] == 1]["state_level"],
         color="orange",
         label="Distress"
     )
